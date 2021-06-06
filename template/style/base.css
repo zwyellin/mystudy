@@ -1,0 +1,109 @@
+/* 盒子类型:display */
+.block{display: block;}
+.inline{display: inline;}
+.inline-block{display: inline-block;}
+.float-right{float: right;}
+.float-left{float: left;}
+.float-none{float: none;}
+.flex{display: flex;}
+.grid{display: grid;}
+.table{display: table;}
+.table-row{display: table-row;}
+.table-column{display: table-column;}
+.table-cell{display: table-cell;}
+.hidden{display: none;}
+
+/* 盒子定位模型及相关 */
+.static{position: static;}
+.fixed{position: fixed};
+.absolute{position: absolute};
+.relative{position: relative};
+.sticky{position: sticky};
+/* --z-index-- */
+.z-index-0{z-index: 0;}
+.z-index-content{z-index: 10;}
+.z-index-nav{z-index: 20;}
+.z-index-mask{z-index: 30;}
+.z-index-modal{z-index: 40;}
+.z-index-auto{z-index: auto;}
+
+/* 盒子可见性及透明度 */
+.visible{visibility: visible;}
+.invisible{visibility: hidden;}
+.opacity-0{opacity: 0;}
+.opacity-25{opacity: .25;}
+.opacity-50{opacity: .5;}
+.opacity-75{opacity: .75;}
+.opacity-100{opacity: 1;}
+
+/* 盒子宽高模型 */
+.box-border{box-sizing: border-box;}
+.box-content{box-sizing: content-box;}
+
+/* 盒子溢出及滑动效果处理 */
+.overflow-auto{overflow: auto;}
+.overflow-visible{overflow: visible;}
+.overflow-hidden{overflow: hidden;}
+.overflow-scroll{overflow: scroll;}
+.overflow-y-scroll{overflow-y: scroll;}
+.overflow-x-scroll{overflow-x: scroll;}
+.scrolling-touch{-webkit-overflow-scrolling: touch;}
+
+/* 盒子边距及背景 */
+[class*=border-]{border-style: solid;border-width: 1px;/* 默认设置值 */}
+.border-0{border-width:0;}
+.border-1{border-width: 1px;}
+.border-2{border-width: 2px;}
+.border-color-a{border-color: #aaa;}
+.border-color-b{border-color: #bbb;}
+.border-color-c{border-color: #ccc;}
+.border-color-d{border-color: #ddd;}
+.border-color-f{border-color: #fff;}
+.border-color-transparent{border-color: transparent;}
+.round-0{border-radius: 0;}
+.round-2{border-radius: 2px;}
+.round-4{border-radius: 4px;}
+.round-6{border-radius: 6px;}
+.round-8{border-radius: 8px;}
+.round-full{border-radius: 9999px;}
+.bg-color-transparent{background-color: transparent;}
+.bg-color-f{background-color: #fff;}
+
+/* 盒子内外边距:具体根据业务创建特定类*/
+.m-0{margin: 0;}
+.p-0{padding:0;}
+
+/* 内容区模型设置：针对文本 */
+.align-middle{vertical-align: middle;}
+.text-center{text-align: center;}
+.text-left{text-align: left;}
+.text-right{text-align: right;}
+.text-justify{text-align: justify;}
+
+/* 内容区字体相关 */
+.fs-12{font-size:12px;}
+.fs-14{font-size:14px;}
+.fs-16{font-size:16px;}
+.fs-18{font-size:18px;}
+.fs-20{font-size:20px;}
+.fs-22{font-size:22px;}
+.fs-24{font-size:24px;}
+.fs-26{font-size:26px;}
+.fs-28{font-size:28px;}
+.fs-30{font-size:30px;}
+.fs-32{font-size:32px;}
+.fs-34{font-size:34px;}
+.fs-36{font-size:36px;}
+.fs-38{font-size:38px;}
+.fs-40{font-size:40px;}
+.font-b{font-weight: bold;}
+.color-2{color:#222;}
+.color-3{color:#333;}
+.color-6{color:#666;}
+.color-9{color:#999;}
+
+/* dot */
+[class*=dots-]{display:-webkit-box;text-overflow:ellipsis;overflow:hidden;-webkit-box-orient:vertical;word-break:break-all;}
+.dots-1{-webkit-line-clamp:1;}
+.dots-2{-webkit-line-clamp:2;}
+.dots-3{-webkit-line-clamp:3;}

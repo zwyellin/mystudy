@@ -1,0 +1,364 @@
+通过babel转码来分析新语法实现
+
+一、声明变量的方法(6种):let,const,import,class,var,function
+1、区别：
+    1.1、var 会变量提升,；let/const会暂时性死区
+    1.2、var 是函数级作用域，let/const是块级作用域
+    1.3、同一作用域，var可以重复声明(创建阶段同名跳过，执行阶段执行赋值操作)，let/const不可以
+    1.4、新的声明变量(let,const,import,class 不会 与 全局变量挂钩)
+2、理解：
+    2.1、let/const 也会声明变量提升，但不能提升使用
+         因为：运行上下文，创建阶段，let/const声明了该变量，但没有默认值undefined。
+         // Uncaught ReferenceError: a is not defined
+         只有执行阶段，才会有值(定义值 或undefined),即之后才能使用该变量
+    2.2、块作用域：可以理解为立即执行函数，// babel有的地方会通过换个变量名来达到相同效果
+         如：for(let i = 0; i< 10; i++) {console.log(i)}
+             => 
+             for(var i = 0; i< 10; i++) { (fn(i){console.log(i)})(i)} 
+    2.3、这个是词法分析要处理的。说明：就算另一个是var定义也不行
+        说明：因为let/const不可以重复声明，所以在语句后面不使用{}声明变量是会报错的。
+        // 如 if(true) let a = 1; 此时没有{},没有形成自己的作用域。这就给是否会同名带来检查难度。所以不允许这么写
+
+二、Iterator（遍历器）
+1、概念：它是一种接口，为各种不同的数据结构(object,array,set,map或自定义的)提供统一的访问机制
+2、默认有的解构有：数组(类数组执行数组的)，set/map,string。这类线性解构的
+3、自动调用环境：
+    2.1、for of / keys/values/entries
+    2.2、数组的解构  // 对象的解构是找同名属性
+    2.3、扩展运算符 ...
+    2.4、Array.from
+    2.5、yield*
+    2.6、Promise.all() / Promise.race()
+4、代码模拟：
+let arr = [1,2,3,4,5]
+arr[Symbol.iterator] = function() {
+    let currentPoint = 0
+    let that = this
+    let isDone = false // 是否迭代完
+    let hasError = false
+    let len = that.length
+     return {
+        next:function() {
+            console.log('next')
+            isDone = currentPoint === (len - 1)
+            return isDone ? {done: isDone} :  {value:that[currentPoint++],done: isDone}
+        },
+        return:function() {
+          console.log('return')
+          return {value:'return',done:false}
+        },
+        isExecureReturn:function() { 
+            // 内部逻辑，用于判断是否需要执行return
+            if(hasError || !isDone) this.return()
+        },
+        throw:function() {
+          console.log('throw')
+          hasError = true
+          return {value:'throw',done:false}
+        }
+    }
+}
+// 迭代过程，大概这个样子 【迭代本质是while循环】
+let _iterator = arr[Symbol.iterator]()
+let item 
+try {
+    while(!(item = _iterator.next()).done) {
+        // 拿到value: i === item.value 
+    }
+} catch(err) {
+    _iterator.throw()
+} finally {
+    _iterator.isExecureReturn()
+}
+
+// 在for of 或 解构中可以去测试效果
+// return 会在 出错 或 break 或 部分解构中会自动调用
+5、对数组解构的理解：
+// let [a,[b,c],d] = [1,[2,3,4],5,6]
+// 按照左边要求，解构第一个 => a = 1
+// 解构第二个，[2,3,4]
+// 第二个因为是嵌套解构，于是对[2,3,4] 解构
+// b = 2
+// c = 3
+// 不再解构，执行[2,3,4]的迭代器的return
+// 返回刚才那里，继续解构第三个，d = 5
+// 不再解构，执行[1,[2,3,4],5,6]的迭代器的return
+6、对于数组，比forEach好用。可以跳出循环
+7、可以发现，对于稀疏数组，
+8、对于稀疏数组。
+    8.1、不会跳过稀疏值(默认迭代器是并没有像forEach等 有in 判断) 
+       => 对于解构来说也是一样的。稀疏项 输出的是undefined。
+    8.2、有上可知。因为默认值是该项为undefined时才生效。所以稀疏项取到的是undefined。所以也生效
+    8.3、所以以下方法都可以(内部逻辑其实都是调用的迭代器) => 为密集数组
+        A: Array.apply(null,targetArr)
+        B：Array.from(targetArr) 
+        c：[...targetArr]
+
+三、Generator
+1、概念：Generator 函数是 ES6 提供的一种异步编程解决方案:分段执行
+2、理解：
+    2.1、Generator 译为生成器。因为一般function只有一个返回值。而它可以分段执行。多个返回值。field译为产出
+    2.2、是迭代器的升级版。可以用于复杂迭代。而不仅仅是对数据解构的迭代。
+3、结构：
+function* fn() {
+    yield ...
+    return ...
+}
+4、代码模拟
+// 先词法分析 将上面代码转化为
+// field 左边的变量 提取为闭包变量
+// 遇到filed 就生成一个代码块:case
+// next参数作为上一个field表达式左边变量的值。
+// 例子
+function* fn(args) {
+    let a1 = 1
+    let x = 2 * (field args + 1 + a1)
+    let a2 = 1
+    let y = x + (field x + 10 + a1 + a2)
+    let z = field x + y
+}
+=>
+function fn(args) {
+    let arr = new Array(3);// 3个field,保存各个field的返回值
+    let currentPoint = 0
+    let isDone = false // 是否迭代完
+    let hasError = false
+    // 把变量保存在这里，这样各个case都能访问及闭包保存
+    let a1,x,a2,y,z
+    return {
+        next:function innerGenerator(preveValue) {
+            if(currentPoint) arr[currentPoint - 1] = preveValue // 值作为上一个field的返回值
+            while(1) { // 作用？
+                isDone = currentPoint === (arr.length - 1)
+                switch(currentPoint) {
+                    case 0: {
+                       a1 = 1
+                       return isDone ? {done: isDone} :  {value:(args + 1 + a1),done: isDone}
+                    };
+                    case 1: {
+                        x = 2 * arr[currentPoint - 1] 
+                        a2 = 1
+                        return isDone ? {done: isDone} :  {value:(x + 10 + a1 + a2),done: isDone}
+                    };
+                    case 2: {
+                        y = x + arr[currentPoint - 1]
+                        return isDone ? {done: isDone} :  {value:(x+y),done: isDone}
+                    }
+                }
+                currentPoint++
+            }
+        }
+        // 也有一个迭代器属性，执行后指向自己
+        [Symbol.iterator]:function(){ return this },
+        return:function() {
+          console.log('return')
+          return {value:'return',done:false}
+        },
+        isExecureReturn:function() { 
+            // 内部逻辑，用于判断是否需要执行return
+            if(hasError || !isDone) this.return()
+        },
+        throw:function() {
+          console.log('throw')
+          hasError = true
+          return {value:'throw',done:false}
+        }
+    }
+}
+
+四、Promise
+// 逻辑
+// Promise 是为了解决 回调地狱 设计的
+// 语法主要是平铺了。即把原先回调一层层写进去。现在通过then注册
+
+//  单独一个Promise逻辑
+// 1、通过new 返回一个新的Promise => MyPromise是一个构造函数
+// 2、MyPromise有自己的状态(state/value/reason) 然后执行参数fn
+// 3、fn(resolve,reject) 内部会在合适的时间调用resolve(value)/reject(reason),
+//    然后异步执行then(fn)/catch(fn)注册的回调(保证回调已经被then/catch注册了)。 
+//    resolve: fn(value); reject: fn(reason) 调用执行(传参)
+// 4、通过then来注册成功回调(catch来注册失败回调)
+// 5、一个简单的Promise就是这么回事。
+
+// 以下描述链式调用及逻辑
+// 1、then/catch返回一个新的Promise，就可以实现链式调用了
+// 2、那新的Promise什么时候执行自己的resolve/reject呢？
+// 3、上一个Promise执行完自己回调，根据回调的结果，来判断执行自己的resolve/reject 
+//    实现：注册then/catch 时，要在回调函数外面再套一个function(value) { cb(value); 逻辑判断新的Promise的resolve/reject的执行逻辑 }
+//    那如果要执行reject,却没有对应的回调:此时是then注册的，那新的Promise的resolve/reject怎么获得?
+//    也就是不管是then还是catch注册，返回的新Promise的resolve,reject，保存在当前Promise实例上，这样就能获取到
+
+(function(){
+    // 构造函数，返回一个新的promise对象
+    function MyPromise(fn,name) {
+        // 属性
+        this.name = name // 方便调试
+        this.state = MyPromise.State.pending
+        this.value = undefined
+        this.reason = undefined
+        this.resolveFunList = []
+        this.rejectFunList = []
+        this.nextPromise = undefined
+        // 内部方法
+        const resolve = (value) => {
+            if(this.state === MyPromise.State.pending) {
+                    // 异步执行回调
+                    setTimeout(() => {
+                        this.value = value
+                        this.state = MyPromise.State.resolved
+                        if(this.resolveFunList.length) {
+                            try {
+                                this.resolveFunList.every( cb => {
+                                    cb(value)
+                                }) 
+                            } catch (res) {
+                                // 如果执行回出错了。则执行reject
+                                reject(res)
+                            }
+                        } else {
+                            // 如果自己没有，交给下一个Promise处理
+                            if(this.nextPromise) {
+                                this.nextPromise.resolve(value)
+                            }
+                        }
+                }, 0)
+            }
+        }
+        const reject = (reason) => {
+            if(this.state === MyPromise.State.pending) {
+                // 异步执行回调
+                setTimeout(() => {
+                    this.reason = reason
+                    this.state = MyPromise.State.rejected
+                    if(this.rejectFunList.length) {
+                        try {
+                            this.rejectFunList.every( cb => {
+                                cb(reason)
+                            })  
+                        } catch (res) {
+                            // 如果执行回出错了。交给下一个Promise处理
+                            if(this.nextPromise) {
+                                this.nextPromise.reject(reason)
+                            }
+                        }
+                    } else {
+                        // 如果自己没有，交给下一个Promise处理
+                        if(this.nextPromise) {
+                            this.nextPromise.reject(reason)
+                        }
+                    }
+                }, 0);
+            }
+        }
+        // 执行fn
+        try {
+            fn.call(this,resolve,reject)
+        } catch (res) {
+            reject(res)
+        }
+    }
+    // 静态属性
+    MyPromise.State = {
+        pending:'pending',
+        resolved:'resolved',
+        rejected:'rejected'
+    }
+    // 传导给下一个Promise
+    MyPromise.returnHandle = function (nextPromise,prevResult,resolve,reject) {
+        if(nextPromise === prevResult) {
+            // 如果下一个上一个Promise返回的是自己。如 p1 = p.then(()=> p1)
+            reject(new TypeError('Chaining cycle'))
+        } else if(prevResult instanceof MyPromise) {
+            // 等待
+            prevResult.then(res => {
+                console.log('内部注册then，回调执行下一个Promise')
+                resolve(res)
+            },'inner-then')
+            prevResult.catch(res => {
+                console.log('内部注册catch，回调执行下一个Promise')
+                reject(res)
+            },'inner-catch')
+        } else {
+            resolve(prevResult)
+        }
+    }
+    
+    // 原型方法 then/catch/finally
+    // 作用：注册回调；返回新的Promise
+    // 根据前一个的执行结果，来执行新Promise里面的resolve/reject
+    MyPromise.prototype.then = function (cb,name) {
+        const that = this
+        return new MyPromise(function (resolve,reject) {
+            that.nextPromise = {
+                promise:this,
+                resolve,
+                reject
+            }
+            // 判断前一个Promise的情况
+            let result 
+            if(that.state === MyPromise.State.resolved) {
+                // 直接执行
+                result = cb(that.value)
+                MyPromise.returnHandle(this, result, resolve, reject)
+            } else if(that.state === MyPromise.State.rejected) {
+                // 不执行，传导
+                MyPromise.returnHandle(this, that.reason, resolve, reject)
+            } else {
+                // 如果还在等待状态。则注册进去
+                that.resolveFunList.push(()=>{
+                    result = cb(that.value)
+                    MyPromise.returnHandle(this, result, resolve, reject)
+                })
+            }
+        },name)
+    }
+    MyPromise.prototype.catch = function (cb,name) {
+        const that = this
+        return new MyPromise(function(resolve,reject) {
+            that.nextPromise = {
+                promise:this,
+                resolve,
+                reject
+            }
+            // 判断前一个Promise的情况
+            let result 
+            if(that.state === MyPromise.State.rejected) {
+                // 直接执行
+                result = cb(that.reason)
+                MyPromise.returnHandle(this, result, resolve, reject)
+            } else if(that.state ===  MyPromise.State.resolved) {
+                // 不执行，传导
+                MyPromise.returnHandle(this, that.value, resolve, reject)
+            } else {
+                // 如果还在等待状态。则注册进去
+                that.rejectFunList.push(()=>{
+                    result = cb(that.reason)
+                    MyPromise.returnHandle(this, result, resolve, reject)
+                })
+            }
+        },name)
+    }
+    
+    const p1 = new MyPromise((resolve,reject) => {
+        setTimeout(() => {
+            resolve(1)
+        }, 3000)
+    },'p1')
+    
+    const p2 = p1.then( res => {
+        console.log(res)
+        return new MyPromise((resolve,reject) => {
+            setTimeout(()=>{
+                reject(2)
+            },3000)
+        },'inner')
+    },'p2')
+    
+    const p3 = p2.then(res => {
+        console.log(res)
+    },'p3')
+    
+    const p4 = p3.catch(res => {
+        console.log('catch',res)
+    },'p4')
+    })()

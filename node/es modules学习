@@ -1,0 +1,97 @@
+1、通过webpack打包后的代码分析 es module 原理
+2、export 会在各个模块前置，以便 静态分析 获得 各个模块的 export内容。
+    可以在本模块未完全执行完就能 建立 导出 模型，方便其它模块使用！
+    所以 export只能是 变量/函数 声明(不能有执行才知道的结果)：静态分析
+3、然后是import 语句
+4、最后才是 模块内的内容
+
+export 导出的都是函数：包括export let a = b
+       => export let a = {
+            configurable: false,
+            enumerable: true,
+            get: function() {a = b; return a } // 重点
+        }
+// why? 为了访问时，是访问的是函数！ why? 其实就是利用闭包
+
+整理下逻辑
+1、es module 会把export前置(所以只能是声明式的语句)，便于静态分析(其它模块想导入本模块，就可以分析导入的项存不存在等)
+    结果为：
+    {
+        a:,
+        xx:,
+    }
+2、然后是 import 语句
+3、最后是 本模块的内容
+
+//好，静态分析，可以判断有无该项，那如果使用该项呢?即要获得其值，怎么操作
+1、如果本模块导出的是export function xx(){} 因为导出的是xx引用。可以直接使用
+    如果xx有用到 本模块 其它 变量。则因为闭包原因，是可以访问到的。
+
+2、如果本模块导出的是export let a = b
+    导出的是a变量。a = b 还没执行呢。所以其实其它模块是拿不到其值的。且b是什么也不知道
+    那怎么办?
+    还是利用闭包
+    => export let a = {
+        configurable: false,
+        enumerable: true,
+        get: function() {a = b;return a } // 重点
+    }
+    //此时，访问a,就会调用get，因为闭包，就能访问到定义a的函数环境的作用域链 就能获取到值
+3、如果存在循环引用，如A导入B,B又导入A,且访问A中导出的变量(非函数，函数声明时就有值，函数不存在这个问题)
+    此时，B中访问该变量，于是调用get,执行get时，因为此时，A模块的内容还没有执行(只执行了export和import)
+    此时，let a = b 还没执行呢，于是访问不到，会报错！！
+    解决思路：改为函数
+
+// 代码 说明：分析export 和 import 原理，及为什么能访问到b
+A模块：(原代码)
+import {b} from './b'
+console.log(b)
+export let a = 1
+
+===> webpack中 A模块代码
+/* 0 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return a; });  // 导出提前
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__b__ = __webpack_require__(1);                        // 然后时import 
+console.log(__WEBPACK_IMPORTED_MODULE_0__b__["a" /* b */])                                                 // 然后时本模块内容
+let a = 1
+/***/ })
+
+B模块:(原代码)
+export let b = 1
+
+===> webpack中 B模块代码
+/* 1 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+"use strict";
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return b; });
+let b = 2
+/***/ })
+/******/ ]);
+
+
+// 分析 console.log(b) ： 其实执行的是 __WEBPACK_IMPORTED_MODULE_0__b__["a" /* b */]
+// 即：b模块来访问a属性，对应  __webpack_require__.d(__webpack_exports__, "a", function() { return b; });
+// 即：
+ __webpack_require__.d 函数为：
+Object.defineProperty(exports, name, {
+    configurable: false,
+    enumerable: true,
+    get: getter
+});
+=> 于是访问b 会 调用这里的 get 即 function() { return b; }
+=> 执行，return b; 此时会在其作用域中找b。于是在其定义的外部函数:B模块中找
+=> 再分析B模块，因为此时B模块已经执行过了。所以函数出栈时会给内部函数添加闭包环境。所以能访问到b 为 2
+=> 如果，再B模块中，要想使用A模块中导出的a，执行get。此时，因为A模块未执行完，get的作用域中找不到a变量，此时会报错。
+
+
+=>总结
+1、export 会前置。(所以导出只能是声明语句)
+2、import 访问其它模块 特征，最终都是执行函数。利用闭包，执行函数可以访问到其定义时的外部变量(即其它模块变量)
+   且，如果变量改变了(不应该直接外部模块改变，可以调用本身模块的函数来改变)，再次执行函数，可以获取到新的值
+
+=>对比commonjs 这个就是执行的结果
+exports 和 require可以放在任何执行位置。因为不会 前置。也即没办法静态分析，循环引用容易出问题(可能此时A模块中该特征还未挂上去呢，B模块想引用肯定报错)
+原样导出。不会把访问变量，转化为函数执行。所以如果基础类型变量改变了，获取到的还是旧的值。
